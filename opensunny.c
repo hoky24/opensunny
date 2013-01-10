@@ -43,60 +43,18 @@ dictionary * conf;
 struct bluetooth_inverter inverters[MAX_INVERTERS];
 int inverter_count = 0;
 
-/*
- * Define Arguments
- */
-
-static const struct option argv_parameters[] = {
-	{ "help",		no_argument,		0,	'h' },
-	{ "quiet",		no_argument,		0,	'q' },
-	{ "verbose",	no_argument,		0,	'v' },
-	{ "config",		required_argument,	0,	'c' },
-	{ "mode",		required_argument,	0, 	'm' },
-	{ "inverter",	required_argument,		0,	'i'	},
-};
-
-static const char *argv_help[] = {
-	"Show help",
-	"Be more quiet, repeatable",
-	"Be more verbose, repeatable",
-	"Config file",
-	"Choose mode of opensunny" ,
-	"Define inverter",
-};
-
-
-void print_help() {
-
-	char mode[128];
-	int mode_max_len=0;
-
-	fprintf(stderr,"OpenSunny HELP\n");
-
-
-	/* Run two times to find max */
-	int run = 0;
-	while (run < 2){
-		for (int arg_pos = 0; arg_pos < (sizeof(argv_parameters)/sizeof(struct option)); ++arg_pos) {
-			if (argv_parameters[arg_pos].has_arg == no_argument){
-				strncpy(mode,argv_parameters[arg_pos].name,sizeof(mode)-1);
-			} else {
-				snprintf(mode,sizeof(mode)-1,"%s=<%s>",argv_parameters[arg_pos].name,argv_parameters[arg_pos].name);
-				int i;
-				for (i = strlen(argv_parameters[arg_pos].name)+2; i < (2*strlen(argv_parameters[arg_pos].name)+2); ++i)
-					mode[i]=toupper(mode[i]);
-			}
-			if (strlen(mode) > mode_max_len)
-				mode_max_len = strlen(mode);
-
-			if (run >0)
-				fprintf(stderr,"  -%c, --%-*s %s \n", argv_parameters[arg_pos].val,mode_max_len+1,mode, argv_help[arg_pos]);
-
-		}
-		run++;
-	}
-
-
+void print_help()
+{
+	fprintf(stderr,
+			"OpenSunny HELP:\n"
+			"  -h, Show this help\n"
+			"  -v, Be more verbose (repeatable)\n"
+			"      -v,   Verbose log level\n"
+			"      -vv,  Debug log level\n"
+			"      -vvv, Trace log level\n"
+			"  -i, Define inverter MAC (one parameter)\n"
+			"      -i XX:XX:XX:XX:XX:XX\n"
+			);
 }
 
 void default_config() {
@@ -193,30 +151,54 @@ void parse_config() {
 
 int parse_args(int argc, char **argv) {
 
+	int arg_help = 0;
 	int arg_verbosity = 0;
 
 	int count;
 
 	if (argc > 1) {
 		for (count = 1; count < argc; count++) {
-			log_debug("Argument received argv[%d] = %s", count, argv[count]);
+			char *argument = argv[count];
+			size_t lenght = strlen(argv[count]);
 
-			if (strcmp(argv[count], "-v") == 0) {
-				arg_verbosity++;
-			} else if (strcmp(argv[count], "-i") == 0) {
-				count++;
-				strncpy(arg_inverter_mac, argv[count], 19);
+			if (lenght < 2 || argument[0] != '-') {
+				fprintf(stderr, "Unknown argument \"%s\"\n\n", argument);
+				print_help();
+				exit(EXIT_FAILURE);
 			}
+
+			for (int i = 1; i < lenght; ++i) {
+				if (argument[i] == 'h') {
+					arg_help = 1;
+				} else if (argument[i] == 'v') {
+					arg_verbosity++;
+				} else if (argument[i] == 'i') {
+					count++;
+					strncpy(arg_inverter_mac, argv[count], 19);
+				}
+				else {
+					fprintf(stderr, "Unknown argument \"%c\"\n\n", argument[i]);
+					print_help();
+					exit(EXIT_FAILURE);
+				}
+			}
+		}
+
+		if (arg_help == 1) {
+			print_help();
+			exit(EXIT_SUCCESS);
 		}
 
 		if (arg_verbosity == 1) {
 			logging_set_loglevel(logger, ll_verbose);
 		} else if (arg_verbosity == 2) {
 			logging_set_loglevel(logger, ll_debug);
+		} else if (arg_verbosity > 2) {
+			logging_set_loglevel(logger, ll_trace);
 		}
 
 		if (strlen(arg_inverter_mac) != 17) {
-			printf("Wrong mac!\n\n");
+			fprintf(stderr, "Invalid invertor mac %s!\n\n", arg_inverter_mac);
 			print_help();
 			exit(EXIT_FAILURE);
 		}
@@ -227,7 +209,6 @@ int parse_args(int argc, char **argv) {
 	}
 
 	return 0;
-
 }
 
 /* Main Routine smatool */
@@ -263,7 +244,7 @@ int main(int argc, char **argv) {
 
 	/* Get timestamps */
 	time_t day_start, day_end;
-    struct tm *loctime;
+	struct tm *loctime;
 
     /* Get the current time. */
     day_start = time (NULL);
@@ -275,13 +256,13 @@ int main(int argc, char **argv) {
     day_start = mktime(loctime);
 
     //printf("\t%d\n\n",day_start);
-    			//1341957600
+                //1341957600
     //day_start = 1341957600;
     loctime->tm_mday++;
     day_end = mktime(loctime);
 
 
-	in_smadata2plus_get_historic_values(&inv,day_start,day_end);
+    in_smadata2plus_get_historic_values(&inv,day_start,day_end);
 
 //	/* Packet Structs */
 //	struct smadata2_l1_packet recv_pl1 = { 0 };
